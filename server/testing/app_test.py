@@ -1,20 +1,42 @@
+from app import app, db
+
+from models import Message  # Import your model
+import pytest
 from datetime import datetime
 
-from app import app
-from models import db, Message
+@pytest.fixture
+def client():
+    app.config['TESTING'] = True
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+    client = app.test_client()
+
+    with app.app_context():
+        db.create_all()  # This creates the tables
+        yield client
+        db.drop_all()  # Clean up after tests
+
+class TestApp:
+    def test_message_creation(self, client):
+        # Test with the database properly set up
+        test_message = Message(username="Liza", body="Hello 👋")
+        db.session.add(test_message)
+        db.session.commit()
+        
+        # Now your tests can query the messages table
 
 class TestApp:
     '''Flask application in app.py'''
 
-    with app.app_context():
-        m = Message.query.filter(
-            Message.body == "Hello 👋"
-            ).filter(Message.username == "Liza")
-
-        for message in m:
-            db.session.delete(message)
-
-        db.session.commit()
+    def setup_method(self):
+        # Ensure tables are created before each test and clean up any existing test messages
+        with app.app_context():
+            db.create_all()
+            m = Message.query.filter(
+                Message.body == "Hello 👋"
+                ).filter(Message.username == "Liza")
+            for message in m:
+                db.session.delete(message)
+            db.session.commit()
 
     def test_has_correct_columns(self):
         with app.app_context():
@@ -89,6 +111,13 @@ class TestApp:
         '''updates the body of a message in the database.'''
         with app.app_context():
 
+            # Ensure there is at least one message in the database
+            hello_from_liza = Message(
+                body="Hello 👋",
+                username="Liza")
+            db.session.add(hello_from_liza)
+            db.session.commit()
+
             m = Message.query.first()
             id = m.id
             body = m.body
@@ -103,13 +132,23 @@ class TestApp:
             g = Message.query.filter_by(body="Goodbye 👋").first()
             assert(g)
 
+            # Clean up: revert the change and delete the test message
             g.body = body
             db.session.add(g)
+            db.session.commit()
+            db.session.delete(g)
             db.session.commit()
 
     def test_returns_data_for_updated_message_as_json(self):
         '''returns data for the updated message as JSON.'''
         with app.app_context():
+
+            # Ensure there is at least one message in the database
+            hello_from_liza = Message(
+                body="Hello 👋",
+                username="Liza")
+            db.session.add(hello_from_liza)
+            db.session.commit()
 
             m = Message.query.first()
             id = m.id
@@ -147,3 +186,5 @@ class TestApp:
 
             h = Message.query.filter_by(body="Hello 👋").first()
             assert(not h)
+
+
